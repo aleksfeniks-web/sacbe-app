@@ -223,11 +223,13 @@ async function initDatabase() {
 // ── AUTH GATEWAY ──────────────────────────────────────────
 app.post('/api/auth/admin', (req, res) => {
   const { password } = req.body;
-  const adminPassword = process.env.ADMIN_PASSWORD || 'sacbeadmin123';
+  const adminPassword = (process.env.ADMIN_PASSWORD || 'sacbeadmin123').trim();
+  const inputPassword = (password || '').trim();
   
-  if (password === adminPassword) {
+  if (inputPassword === adminPassword) {
     return res.json({ success: true });
   } else {
+    console.warn(`[AUTH] Intento de login fallido. Longitud recibida: ${inputPassword.length}, Longitud esperada: ${adminPassword.length}`);
     return res.status(401).json({ success: false, error: "Contraseña incorrecta." });
   }
 });
