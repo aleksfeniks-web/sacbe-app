@@ -124,6 +124,9 @@ async function initDatabase() {
     
     console.log("Database schema initialized.");
     
+    // Alter tickets table to add real base64 image support if not present
+    await dbQuery("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS imagen_base64 TEXT;");
+    
     // Check if seeding is needed
     const res = await dbQuery("SELECT COUNT(*) FROM privadas");
     const count = parseInt(res.rows[0].count);
@@ -308,7 +311,8 @@ app.get('/api/db', async (req, res) => {
       banco: row.banco,
       imagenMock: row.imagen_mock,
       estado: row.estado,
-      motivoRechazo: row.motivo_rechazo
+      motivoRechazo: row.motivo_rechazo,
+      imagen_base64: row.imagen_base64
     }));
     
     res.json({
@@ -409,13 +413,13 @@ app.post('/api/import', async (req, res) => {
 
 // Submit payment validation ticket (Inquilino)
 app.post('/api/tickets', async (req, res) => {
-  const { id, privadaId, casa, concepto, monto, folio, fecha, banco, imagenMock } = req.body;
+  const { id, privadaId, casa, concepto, monto, folio, fecha, banco, imagenMock, imagen_base64 } = req.body;
   
   try {
     await dbQuery(`
-      INSERT INTO tickets (id, privada_id, casa, concepto, monto, folio, fecha, banco, imagen_mock, estado, motivo_rechazo)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pendiente', '')
-    `, [id, privadaId, casa, concepto, monto, folio, fecha, banco, imagenMock]);
+      INSERT INTO tickets (id, privada_id, casa, concepto, monto, folio, fecha, banco, imagen_mock, estado, motivo_rechazo, imagen_base64)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pendiente', '', $10)
+    `, [id, privadaId, casa, concepto, monto, folio, fecha, banco, imagenMock === undefined ? false : imagenMock, imagen_base64 || null]);
     
     res.json({ success: true });
   } catch (err) {

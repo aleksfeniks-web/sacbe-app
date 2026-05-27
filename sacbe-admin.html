@@ -1221,12 +1221,20 @@
               </div>
               
               <div class="form-group">
-                <label class="form-label">Subir Captura de Pantalla / Comprobante (Simulado)</label>
-                <div class="excel-import-box" style="padding:20px;" onclick="simulateTicketUpload()">
-                  <i class="fa fa-cloud-upload-alt" style="font-size:24px; color:var(--green-600); margin-bottom:8px;"></i>
-                  <span id="ticketUploadLabel" style="display:block; font-weight:600; font-size:12.5px; color:var(--gray-600);">Hacer Clic para simular carga de ticket (SPEI.png)</span>
+                <label class="form-label">Subir Captura de Pantalla / Comprobante de Transferencia (Real)</label>
+                <div class="excel-import-box" style="padding:20px; position:relative; min-height:120px;" onclick="triggerTicketFileInput()">
+                  <input type="file" id="tFileInput" accept="image/*" style="display:none;" onchange="handleTicketFileSelect(event)">
+                  <div id="uploadFormPrompt">
+                    <i class="fa fa-cloud-upload-alt" style="font-size:26px; color:var(--green-600); margin-bottom:8px;"></i>
+                    <span style="display:block; font-weight:600; font-size:12.5px; color:var(--gray-600);">Haz clic para seleccionar comprobante</span>
+                    <span style="font-size:11px; color:var(--gray-400);">Formatos admitidos: PNG, JPG, JPEG</span>
+                  </div>
+                  <div id="uploadFormPreview" style="display:none; flex-direction:column; align-items:center;">
+                    <img id="uploadPreviewImg" src="" style="max-height:80px; max-width:120px; border-radius:6px; margin-bottom:6px; border:1.5px solid var(--gray-200); object-fit:cover;">
+                    <span id="uploadPreviewName" style="font-weight:600; font-size:12.5px; color:var(--green-700);">archivo.png</span>
+                    <span style="font-size:10px; color:var(--gray-400);">Hacer clic para cambiar archivo</span>
+                  </div>
                 </div>
-                <input type="hidden" id="tSimulatedFile" value="0">
               </div>
               
               <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
@@ -1580,6 +1588,18 @@
   </div>
 </div>
 
+<!-- LIGHTBOX IMAGE VIEW (REAL COMPROBANTE SCREENSHOT) -->
+<div class="modal-overlay" id="modalLightbox" onclick="closeModal('modalLightbox')">
+  <div class="modal" style="width: auto; max-width: 90vw; background: transparent; border: none; box-shadow: none; overflow: visible;">
+    <div style="text-align: right; padding-bottom: 8px;">
+      <button class="drawer-close" style="display: inline-flex;" onclick="closeModal('modalLightbox')"><i class="fa fa-times"></i></button>
+    </div>
+    <div style="text-align: center;">
+      <img id="lightboxImg" src="" style="max-width: 100%; max-height: 80vh; border-radius: 12px; box-shadow: var(--shadow-lg); border: 3px solid white;">
+    </div>
+  </div>
+</div>
+
 <div class="notif" id="notif"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1611,6 +1631,7 @@ let db = {
 };
 
 let syncMode = 'offline'; // 'offline' or 'online'
+let tBase64Data = null; // Stores real Base64 image payload
 
 // ── SERVER SYNCHRONIZATION ENGINE (REST CLIENT) ──────────────────────────────────────────
 async function syncWithServer() {
@@ -2405,50 +2426,76 @@ function selectTicketForView(ticketId) {
     </div>
   `;
   
-  viewer.innerHTML = `
-    <div class="receipt-mockup">
-      <div class="receipt-header">
-        <div class="receipt-bank-logo">
-          <i class="fa fa-building-columns"></i> MOCK-SPEI DIGITAL
+  let receiptHtml = '';
+  if (t.imagen_base64) {
+    receiptHtml = `
+      <div style="background:#fff; border:2px solid var(--gray-200); border-radius:12px; box-shadow:var(--shadow-lg); padding:20px; width:100%; max-width:440px;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--gray-400); margin-bottom:12px; border-bottom:1px solid var(--gray-100); padding-bottom:6px;">
+          Comprobante SPEI Real Subido por Lote #${t.casa}
         </div>
-        <div class="receipt-type">Comprobante de Transferencia</div>
+        <div style="text-align:center; position:relative; overflow:hidden; border-radius:8px; border:1px solid var(--gray-200); cursor:zoom-in; background:var(--gray-50);" onclick="openImageLightbox('${t.imagen_base64}')">
+          <img src="${t.imagen_base64}" style="max-width:100%; max-height:260px; object-fit:contain; border-radius:6px; display:block; margin:0 auto;">
+          <div style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.6); color:#fff; font-size:10.5px; padding:4px 10px; border-radius:20px; font-weight:600;">
+            <i class="fa fa-magnifying-glass-plus"></i> Ampliar Captura
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px; margin-top:16px; border-top:1px dashed var(--gray-200); padding-top:12px;">
+          <div><span style="color:var(--gray-400)">Folio SPEI:</span> <strong style="color:var(--gray-700)">${t.folio}</strong></div>
+          <div><span style="color:var(--gray-400)">Monto:</span> <strong style="color:var(--green-700)">${fmtNum(t.monto)}</strong></div>
+          <div><span style="color:var(--gray-400)">Banco:</span> <strong style="color:var(--gray-700)">${t.banco}</strong></div>
+          <div><span style="color:var(--gray-400)">Fecha:</span> <strong style="color:var(--gray-700)">${t.fecha}</strong></div>
+        </div>
       </div>
-      
-      <div class="receipt-row">
-        <span class="receipt-label">Estatus Transacción</span>
-        <span class="receipt-val" style="color:var(--green-600)">EXITOSA</span>
+    `;
+  } else {
+    receiptHtml = `
+      <div class="receipt-mockup">
+        <div class="receipt-header">
+          <div class="receipt-bank-logo">
+            <i class="fa fa-building-columns"></i> MOCK-SPEI DIGITAL
+          </div>
+          <div class="receipt-type">Comprobante de Transferencia</div>
+        </div>
+        
+        <div class="receipt-row">
+          <span class="receipt-label">Estatus Transacción</span>
+          <span class="receipt-val" style="color:var(--green-600)">EXITOSA</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Fecha / Hora</span>
+          <span class="receipt-val">${t.fecha} 11:24 hrs</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Folio SPEI</span>
+          <span class="receipt-val">${t.folio}</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Banco Emisor</span>
+          <span class="receipt-val">${t.banco || 'BBVA México'}</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Beneficiario</span>
+          <span class="receipt-val">Administración Sacbé S.C.</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Casa / Lote</span>
+          <span class="receipt-val">Lote #${t.casa} (${getActivePrivada().nombre})</span>
+        </div>
+        <div class="receipt-row">
+          <span class="receipt-label">Concepto</span>
+          <span class="receipt-val">${t.concepto}</span>
+        </div>
+        
+        <div class="receipt-row receipt-total-row">
+          <span class="receipt-label" style="font-weight:800; color:var(--gray-800)">IMPORTE</span>
+          <span class="receipt-val" style="color:var(--green-700)">${fmtNum(t.monto)}</span>
+        </div>
       </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Fecha / Hora</span>
-        <span class="receipt-val">${t.fecha} 11:24 hrs</span>
-      </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Folio SPEI</span>
-        <span class="receipt-val">${t.folio}</span>
-      </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Banco Emisor</span>
-        <span class="receipt-val">${t.banco || 'BBVA México'}</span>
-      </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Beneficiario</span>
-        <span class="receipt-val">Administración Sacbé S.C.</span>
-      </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Casa / Lote</span>
-        <span class="receipt-val">Lote #${t.casa} (${getActivePrivada().nombre})</span>
-      </div>
-      <div class="receipt-row">
-        <span class="receipt-label">Concepto</span>
-        <span class="receipt-val">${t.concepto}</span>
-      </div>
-      
-      <div class="receipt-row receipt-total-row">
-        <span class="receipt-label" style="font-weight:800; color:var(--gray-800)">IMPORTE</span>
-        <span class="receipt-val" style="color:var(--green-700)">${fmtNum(t.monto)}</span>
-      </div>
-    </div>
-    
+    `;
+  }
+  
+  viewer.innerHTML = `
+    ${receiptHtml}
     ${actionButtonsHtml}
   `;
 }
@@ -2951,10 +2998,26 @@ function switchTenantSubTab(tab) {
   document.getElementById('tabTenantHistory').classList.toggle('active', tab === 'history');
 }
 
-function simulateTicketUpload() {
-  document.getElementById('tSimulatedFile').value = "1";
-  document.getElementById('ticketUploadLabel').textContent = "SPEI_transferencia_acreditada.png cargado correctamente (Simulación exitosa ✓)";
-  document.getElementById('ticketUploadLabel').style.color = "var(--green-700)";
+function triggerTicketFileInput() {
+  document.getElementById('tFileInput').click();
+}
+
+function handleTicketFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    tBase64Data = evt.target.result;
+    
+    // Update preview UI
+    document.getElementById('uploadFormPrompt').style.display = 'none';
+    document.getElementById('uploadFormPreview').style.display = 'flex';
+    document.getElementById('uploadPreviewImg').src = tBase64Data;
+    document.getElementById('uploadPreviewName').textContent = file.name;
+    notify("Comprobante cargado exitosamente ✓");
+  };
+  reader.readAsDataURL(file);
 }
 
 async function submitTicket() {
@@ -2967,29 +3030,30 @@ async function submitTicket() {
   const folio = document.getElementById('tFolio').value.trim();
   const fecha = document.getElementById('tFecha').value;
   const banco = document.getElementById('tBanco').value.trim() || 'BBVA Bancomer';
-  const hasFile = document.getElementById('tSimulatedFile').value === "1";
   
   if (monto <= 0) { alert("Ingresa un monto válido"); return; }
   if (!folio) { alert("Ingresa el Folio / Clave de Rastreo SPEI"); return; }
-  if (!hasFile) { alert("Por favor haz clic en cargar comprobante para simular la captura de pantalla bancaria."); return; }
+  if (!tBase64Data) { alert("Por favor selecciona una captura de pantalla del comprobante de transferencia."); return; }
   
   const newTicket = {
     id: Date.now(),
     privadaId: db.activePrivadaId,
     casa: casaNum,
     concepto, monto, folio, fecha, banco,
-    imagenMock: true
+    imagenMock: false,
+    imagen_base64: tBase64Data
   };
   
   if (syncMode === 'online') {
     try {
-      await fetch('/api/tickets', {
+      const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTicket)
       });
+      if (!res.ok) throw new Error("API submit failed");
     } catch(e) {
-      alert("Error.");
+      alert("Error de red al enviar comprobante. Se guardará localmente.");
     }
   }
   
@@ -3001,10 +3065,13 @@ async function submitTicket() {
   
   saveDBLocal();
   
+  // Reset form & preview
   document.getElementById('tFolio').value = '';
-  document.getElementById('tSimulatedFile').value = '0';
-  document.getElementById('ticketUploadLabel').textContent = "Hacer Clic para simular carga de ticket (SPEI.png)";
-  document.getElementById('ticketUploadLabel').style.color = "var(--gray-600)";
+  document.getElementById('tFileInput').value = '';
+  tBase64Data = null;
+  
+  document.getElementById('uploadFormPrompt').style.display = 'block';
+  document.getElementById('uploadFormPreview').style.display = 'none';
   
   notify("Comprobante SPEI enviado a revisión ✓");
   
@@ -3039,6 +3106,11 @@ function loadTenantHistoryTable(casaNum) {
 // ── UTILITIES MODALS ──────────────────────────────────────────
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function openImageLightbox(base64) {
+  document.getElementById('lightboxImg').src = base64;
+  openModal('modalLightbox');
+}
 
 // ── NOTIFY ──────────────────────────────────────────────
 function notify(msg) {
