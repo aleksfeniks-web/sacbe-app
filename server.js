@@ -9,9 +9,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Enable CORS and JSON parsing
+// Enable CORS and JSON parsing with custom payload size limits (10MB for base64 screenshots)
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Serve frontend static files directly from root
 app.use(express.static(__dirname));
