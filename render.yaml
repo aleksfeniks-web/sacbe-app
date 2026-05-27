@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: sacbe-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+        placeholder: "Pega aquí tu connection string de Neon.tech (postgresql://...)"
+      - key: ADMIN_PASSWORD
+        value: "sacbeadmin123"
+        placeholder: "Define una contraseña para el modo Administrador (Opcional, por defecto es sacbeadmin123)"

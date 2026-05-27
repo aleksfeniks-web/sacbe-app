@@ -253,14 +253,49 @@
   .topbar-title { font-size: 18px; font-weight: 700; color: var(--gray-900); }
   .topbar-subtitle { font-size: 11.5px; color: var(--gray-400); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1px; }
   .topbar-right { display: flex; align-items: center; gap: 14px; }
-  .date-badge {
+  
+  /* Sync Badge */
+  .sync-badge {
     font-size: 12px;
-    color: var(--green-800);
     font-weight: 600;
-    background: var(--green-50);
     padding: 6px 14px;
     border-radius: 20px;
-    border: 1px solid var(--green-100);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition);
+    border: 1px solid transparent;
+  }
+  .sync-badge.active {
+    background: var(--green-50);
+    color: var(--green-700);
+    border-color: var(--green-100);
+  }
+  .sync-badge.offline {
+    background: var(--gray-100);
+    color: var(--gray-500);
+    border-color: var(--gray-200);
+  }
+  .sync-badge.syncing {
+    background: var(--blue-50);
+    color: var(--blue-600);
+    border-color: var(--blue-100);
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+  .shake { animation: shake 0.4s ease; }
+  
+  .date-badge {
+    font-size: 12px;
+    color: var(--gray-600);
+    font-weight: 600;
+    background: var(--gray-50);
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
   }
   
   /* BUTTONS */
@@ -883,6 +918,10 @@
         <span class="topbar-subtitle" id="topbarSubtitle">Privada Ceiba</span>
       </div>
       <div class="topbar-right">
+        <!-- Sync Indicator -->
+        <span class="sync-badge offline" id="dbSyncBadge">
+          <i class="fa fa-database"></i> <span id="dbSyncText">Cargando...</span>
+        </span>
         <span class="date-badge" id="todayDate"></span>
         <button class="btn btn-primary btn-sm" id="topbarAction" onclick="openAddModal()">
           <i class="fa fa-plus"></i> Nuevo Registro
@@ -993,7 +1032,7 @@
         </div>
       </div>
 
-      <!-- ── VIEW: VALIDAR COMPROBANTES (NUEVA) ── -->
+      <!-- ── VIEW: VALIDAR COMPROBANTES ── -->
       <div class="view" id="viewValidaciones">
         <div class="split-layout">
           <div class="validations-list-panel">
@@ -1005,7 +1044,6 @@
             </div>
           </div>
           <div class="validation-viewer-panel" id="ticketViewerPanel">
-            <!-- Shows details when item selected, or empty state -->
             <div class="empty-state">
               <i class="fa fa-ticket-alt"></i>
               <h3>Selecciona un ticket</h3>
@@ -1015,7 +1053,7 @@
         </div>
       </div>
 
-      <!-- ── VIEW: NOMINA Y GASTOS (NUEVA) ── -->
+      <!-- ── VIEW: NOMINA Y GASTOS ── -->
       <div class="view" id="viewNomina">
         <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
           <div class="stat-card green">
@@ -1348,6 +1386,29 @@
   </div>
 </div>
 
+<!-- MODAL: AUTENTICACIÓN ADMINISTRADOR (NUEVA) -->
+<div class="modal-overlay" id="modalAdminAuth">
+  <div class="modal" style="width:380px;">
+    <div class="modal-header">
+      <span class="modal-title">Acceso Restringido</span>
+      <button class="modal-close" onclick="closeAuthModal()"><i class="fa fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <i class="fa fa-lock" style="font-size:44px; color:var(--green-700); margin-bottom:16px;"></i>
+      <p style="color:var(--gray-500); margin-bottom:20px; font-size:13px;">Se requiere contraseña de administrador para ingresar al panel de gestión condominal.</p>
+      <div class="form-group">
+        <label class="form-label" style="text-align:left;">Contraseña</label>
+        <input class="form-control" type="password" id="authPassword" placeholder="••••••••" style="text-align:center; font-size:16px; letter-spacing:0.12em;" onkeydown="if(event.key==='Enter') verifyAdminAuth()">
+      </div>
+      <div id="authErrorAlert" style="display:none; color:var(--red-600); font-weight:700; font-size:12.5px; margin-top:8px;">Contraseña incorrecta.</div>
+    </div>
+    <div class="modal-footer" style="justify-content:center; gap:10px;">
+      <button class="btn btn-outline" style="width:45%;" onclick="closeAuthModal()">Cancelar</button>
+      <button class="btn btn-primary" style="width:45%;" onclick="verifyAdminAuth()">Acceder</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: AGREGAR NUEVA PRIVADA -->
 <div class="modal-overlay" id="modalAddPrivada">
   <div class="modal">
@@ -1523,177 +1584,97 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-// ── LOCALSTORAGE AND ENGINE ENGINE ──────────────────────────────────────────
-const DB_KEY = 'sacbe_admin_db';
-
-let db = {
+// ── LOCAL FALLBACK SEED DATA (IN-MEMORY fallback if offline) ──────────────────────────────────────────
+let localFallbackDb = {
   activePrivadaId: "ceiba",
   privadas: [
-    { id: "ceiba", nombre: "Privada Ceiba", cuotaBase: 680, totalCasas: 88 },
-    { id: "akbal", nombre: "Akbal (Etapa 2)", cuotaBase: 750, totalCasas: 45 },
-    { id: "kiin", nombre: "Akbal Solar", cuotaBase: 700, totalCasas: 60 }
+    { id: "ceiba", nombre: "Privada Ceiba", cuotaBase: 680, totalCasas: 88 }
   ],
+  casas: {
+    "ceiba": []
+  },
+  tickets: [],
+  nominas: { "ceiba": [] },
+  projects: { "ceiba": [] }
+};
+
+for (let i = 1; i <= 88; i++) localFallbackDb.casas["ceiba"].push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
+
+// Global Application State (Reactively hydrated from Server REST API or offline LocalStorage)
+let db = {
+  activePrivadaId: "ceiba",
+  privadas: [],
   casas: {},
   tickets: [],
   nominas: {},
   projects: {}
 };
 
-function saveDB() {
-  localStorage.setItem(DB_KEY, JSON.stringify(db));
-}
+let syncMode = 'offline'; // 'offline' or 'online'
 
-function loadDB() {
-  const local = localStorage.getItem(DB_KEY);
-  if (local) {
-    try {
-      db = JSON.parse(local);
-      // Ensure structures exist
-      if (!db.tickets) db.tickets = [];
-      if (!db.nominas) db.nominas = {};
-      if (!db.projects) db.projects = {};
-    } catch(e) {
-      console.error("Error reading localStorage", e);
-      initSeeds();
-    }
-  } else {
-    initSeeds();
-  }
-}
-
-function initSeeds() {
-  db.activePrivadaId = "ceiba";
-  db.privadas = [
-    { id: "ceiba", nombre: "Privada Ceiba", cuotaBase: 680, totalCasas: 88 },
-    { id: "akbal", nombre: "Akbal (Etapa 2)", cuotaBase: 750, totalCasas: 45 },
-    { id: "kiin", nombre: "Akbal Solar", cuotaBase: 700, totalCasas: 60 }
-  ];
+// ── SERVER SYNCHRONIZATION ENGINE (REST CLIENT) ──────────────────────────────────────────
+async function syncWithServer() {
+  const badge = document.getElementById('dbSyncBadge');
+  const text = document.getElementById('dbSyncText');
   
-  db.casas = {};
-  db.nominas = {};
-  db.projects = {};
-  db.tickets = [];
-
-  // Seed Ceiba (88 houses)
-  const ceibaCasas = [];
-  for (let i = 1; i <= 88; i++) {
-    ceibaCasas.push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
-  }
-  // Original seeds
-  const seeds = [
-    [1, 0, 2000, 0, 0, 600], [6, 680, 0, 0, 0, 600], [16, 680, 0, 0, 0, 600],
-    [17, 680, 0, 0, 0, 600], [18, 680, 0, 0, 0, 600],
-    [21, 680, 0, 0, 0, 600], [22, 680, 0, 0, 0, 600],
-    [28, 0, 0, 0, 0, 600], [32, 680, 0, 0, 30, 0],
-    [33, 0, 0, 0, 0, 600], [36, 680, 0, 136, 35, 600],
-    [37, 0, 0, 0, 0, 600], [41, 0, 0, 0, 0, 600],
-    [63, 0, 0, 0, 0, 600], [67, 0, 0, 0, 0, 600], [68, 510, 0, 0, 0, 600],
-    [71, 0, 0, 0, 0, 600], [74, 0, 0, 0, 0, 600], [75, 4620, 0, 0, 0, 600],
-    [76, 0, 0, 0, 0, 600], [87, 1360, 0, 0, 0, 600],
-  ];
-  seeds.forEach(([c, a, m, ac, r, cam]) => {
-    ceibaCasas[c-1] = { casa: c, adeudo: a, multa: m, accesos: ac, receptor: r, camaras: cam };
-  });
-  db.casas["ceiba"] = ceibaCasas;
-
-  // Seed Akbal (45 houses)
-  const akbalCasas = [];
-  for (let i = 1; i <= 45; i++) {
-    const isDebtor = i % 8 === 0;
-    akbalCasas.push({
-      casa: i,
-      adeudo: isDebtor ? 750 : 0,
-      multa: isDebtor ? 150 : 0,
-      accesos: 0, receptor: 0, camaras: 0
-    });
-  }
-  db.casas["akbal"] = akbalCasas;
-
-  // Seed Kiin (60 houses)
-  const kiinCasas = [];
-  for (let i = 1; i <= 60; i++) {
-    const isDebtor = i % 10 === 0;
-    kiinCasas.push({
-      casa: i,
-      adeudo: isDebtor ? 700 : 0,
-      multa: 0, accesos: 0, receptor: 0, camaras: 0
-    });
-  }
-  db.casas["kiin"] = kiinCasas;
-
-  // Seed Tickets (pending SPEI validations)
-  db.tickets = [
-    {
-      id: 1716832200000,
-      privadaId: "ceiba",
-      casa: 6,
-      concepto: "Adeudo Mantenimiento",
-      monto: 680,
-      folio: "SPEI-BBVA-9912019",
-      fecha: "2026-05-25",
-      banco: "BBVA México",
-      imagenMock: true,
-      estado: "Pendiente",
-      motivoRechazo: ""
-    },
-    {
-      id: 1716832200001,
-      privadaId: "ceiba",
-      casa: 28,
-      concepto: "1a Cuota Cámaras",
-      monto: 600,
-      folio: "SPEI-SANT-5002931",
-      fecha: "2026-05-26",
-      banco: "Santander",
-      imagenMock: true,
-      estado: "Pendiente",
-      motivoRechazo: ""
-    },
-    {
-      id: 1716832200002,
-      privadaId: "akbal",
-      casa: 16,
-      concepto: "Adeudo Mantenimiento",
-      monto: 750,
-      folio: "SPEI-BANM-0182838",
-      fecha: "2026-05-27",
-      banco: "Citibanamex",
-      imagenMock: true,
-      estado: "Pendiente",
-      motivoRechazo: ""
+  badge.className = "sync-badge syncing";
+  text.textContent = "Sincronizando...";
+  
+  try {
+    const response = await fetch('/api/db');
+    if (!response.ok) throw new Error("Server offline configuration.");
+    
+    const serverDb = await response.json();
+    
+    db.privadas = serverDb.privadas;
+    db.casas = serverDb.casas;
+    db.tickets = serverDb.tickets;
+    db.nominas = serverDb.nominas;
+    db.projects = serverDb.projects;
+    
+    syncMode = 'online';
+    badge.className = "sync-badge active";
+    text.textContent = "Neon Conectado";
+    
+    // Save locally as backup cache
+    localStorage.setItem('sacbe_offline_cache', JSON.stringify(db));
+  } catch (err) {
+    console.warn("Could not sync with PostgreSQL server. Scaling down to Offline Cache.", err);
+    syncMode = 'offline';
+    badge.className = "sync-badge offline";
+    text.textContent = "Modo Desconectado";
+    
+    // Load local storage cache
+    const cache = localStorage.getItem('sacbe_offline_cache');
+    if (cache) {
+      db = JSON.parse(cache);
+    } else {
+      db = {
+        activePrivadaId: "ceiba",
+        privadas: localFallbackDb.privadas,
+        casas: localFallbackDb.casas,
+        tickets: [],
+        nominas: localFallbackDb.nominas,
+        projects: localFallbackDb.projects
+      };
     }
-  ];
-
-  // Seed Payroll (Nominas)
-  db.nominas["ceiba"] = [
-    { id: 1, nombre: "Don Tacho (Fulgencio)", puesto: "Jardinero y Áreas Verdes", sueldo: 4800, frecuencia: "Quincenal", estadoPeriodo: "Pendiente", historialPagos: [] },
-    { id: 2, nombre: "Vigilancia Cancún Seguro", puesto: "Seguridad y Control de Accesos", sueldo: 12500, frecuencia: "Mensual", estadoPeriodo: "Pagado", historialPagos: [] },
-    { id: 3, nombre: "María del Carmen", puesto: "Limpieza Alberca y Casa Club", sueldo: 3500, frecuencia: "Quincenal", estadoPeriodo: "Pendiente", historialPagos: [] }
-  ];
-  db.nominas["akbal"] = [
-    { id: 4, nombre: "Pedro Martínez", puesto: "Jardinería y Limpieza", sueldo: 4200, frecuencia: "Quincenal", estadoPeriodo: "Pendiente", historialPagos: [] }
-  ];
-  db.nominas["kiin"] = [
-    { id: 5, nombre: "Don José Flores", puesto: "Jardinero Solar", sueldo: 4200, frecuencia: "Quincenal", estadoPeriodo: "Pendiente", historialPagos: [] }
-  ];
-
-  // Seed Projects
-  db.projects["ceiba"] = [
-    { id: 1, nombre: 'Instalación cámaras de seguridad', presupuesto: 52800, ejecutado: 18000, inicio: '2026-04-01', fin: '2026-07-31', estado: 'en_progreso' },
-    { id: 2, nombre: 'Mantenimiento alberca', presupuesto: 12000, ejecutado: 12000, inicio: '2026-03-15', fin: '2026-04-15', estado: 'completado' },
-    { id: 3, nombre: 'Reparación barda perimetral norte', presupuesto: 28000, ejecutado: 5000, inicio: '2026-05-10', fin: '2026-08-30', estado: 'en_progreso' }
-  ];
-  db.projects["akbal"] = [];
-  db.projects["kiin"] = [];
-
-  saveDB();
+  }
+  
+  // Render views
+  populatePrivadaSelector();
+  renderNav();
+  showView(currentView);
 }
 
-loadDB();
+function saveDBLocal() {
+  if (syncMode === 'offline') {
+    localStorage.setItem('sacbe_offline_cache', JSON.stringify(db));
+  }
+}
 
 // ── HELEPRS ──────────────────────────────────────────────
 function getActivePrivada() {
-  return db.privadas.find(p => p.id === db.activePrivadaId) || db.privadas[0];
+  return db.privadas.find(p => p.id === db.activePrivadaId) || db.privadas[0] || { id: "ceiba", nombre: "Privada Ceiba", cuotaBase: 680, totalCasas: 88 };
 }
 function getCasas() {
   return db.casas[db.activePrivadaId] || [];
@@ -1744,7 +1725,6 @@ function renderNav() {
   const items = currentRole === 'admin' ? adminNav : tenantNav;
   const nav = document.getElementById('sidebarNav');
   
-  // Calculate pending validations count
   const pendingCount = db.tickets.filter(t => t.privadaId === db.activePrivadaId && t.estado === 'Pendiente').length;
   
   nav.innerHTML = items.map(item => {
@@ -1765,7 +1745,79 @@ function renderNav() {
   }).join('');
 }
 
+// ── ADMIN PASSWORD AUTHENTICATION ──────────────────────────────────────────
+let pendingRoleSwitch = null;
+
 function switchRole(role) {
+  if (role === 'admin') {
+    // Check if session storage has authenticated flag
+    const isAuth = sessionStorage.getItem('sacbe_admin_authenticated') === 'true';
+    if (isAuth) {
+      performSwitchRole('admin');
+    } else {
+      pendingRoleSwitch = 'admin';
+      openAuthModal();
+    }
+  } else {
+    performSwitchRole('tenant');
+  }
+}
+
+function openAuthModal() {
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authErrorAlert').style.display = 'none';
+  document.getElementById('authPassword').classList.remove('shake');
+  openModal('modalAdminAuth');
+}
+
+function closeAuthModal() {
+  closeModal('modalAdminAuth');
+  pendingRoleSwitch = null;
+  // keep active role styling updated
+  document.getElementById('roleAdmin').classList.toggle('active', currentRole === 'admin');
+  document.getElementById('roleTenant').classList.toggle('active', currentRole === 'tenant');
+}
+
+async function verifyAdminAuth() {
+  const password = document.getElementById('authPassword').value;
+  const errorAlert = document.getElementById('authErrorAlert');
+  const inputEl = document.getElementById('authPassword');
+  
+  errorAlert.style.display = 'none';
+  inputEl.classList.remove('shake');
+  
+  try {
+    const res = await fetch('/api/auth/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    
+    if (res.ok) {
+      sessionStorage.setItem('sacbe_admin_authenticated', 'true');
+      closeModal('modalAdminAuth');
+      performSwitchRole('admin');
+      notify("Acceso Administrador concedido ✓");
+    } else {
+      throw new Error("Invalid password");
+    }
+  } catch (err) {
+    // Offline bypass if server offline for easier mock presentation
+    if (syncMode === 'offline' && password === 'sacbeadmin123') {
+      sessionStorage.setItem('sacbe_admin_authenticated', 'true');
+      closeModal('modalAdminAuth');
+      performSwitchRole('admin');
+      notify("Acceso Administrador offline ✓");
+      return;
+    }
+    
+    // Auth Failed Action
+    inputEl.classList.add('shake');
+    errorAlert.style.display = 'block';
+  }
+}
+
+function performSwitchRole(role) {
   currentRole = role;
   document.getElementById('roleAdmin').classList.toggle('active', role === 'admin');
   document.getElementById('roleTenant').classList.toggle('active', role === 'tenant');
@@ -1815,21 +1867,20 @@ function populatePrivadaSelector() {
   document.getElementById('topbarSubtitle').textContent = getActivePrivada().nombre;
 }
 
-function switchPrivada(privId) {
+async function switchPrivada(privId) {
   db.activePrivadaId = privId;
-  saveDB();
+  saveDBLocal();
   populatePrivadaSelector();
   
-  // Ensure house lists exist
-  if (!db.casas[privId]) {
-    const p = db.privadas.find(x => x.id === privId);
+  // Offline mock generation
+  if (syncMode === 'offline' && !db.casas[privId]) {
+    const p = db.privadas.find(x => x.id === privId) || { totalCasas: 40 };
     const newHouses = [];
     for (let i = 1; i <= p.totalCasas; i++) newHouses.push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
     db.casas[privId] = newHouses;
-    saveDB();
+    saveDBLocal();
   }
   
-  // Reload current view
   showView(currentView);
   notify(`Cambiado a ${getActivePrivada().nombre} ✓`);
 }
@@ -1841,7 +1892,7 @@ function openAddPrivadaModal() {
   openModal('modalAddPrivada');
 }
 
-function saveNewPrivada() {
+async function saveNewPrivada() {
   const nombre = document.getElementById('privName').value.trim();
   const totalCasas = parseInt(document.getElementById('privTotalCasas').value);
   const cuotaBase = parseFloat(document.getElementById('privCuotaBase').value) || 0;
@@ -1851,26 +1902,35 @@ function saveNewPrivada() {
   
   const id = nombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
   
-  // Check if exists
   if (db.privadas.find(p => p.id === id)) { alert("Esta privada ya existe"); return; }
   
-  db.privadas.push({ id, nombre, cuotaBase, totalCasas });
+  const newPriv = { id, nombre, cuotaBase, totalCasas };
   
-  // Create houses
-  const newHouses = [];
-  for (let i = 1; i <= totalCasas; i++) {
-    newHouses.push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/privadas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPriv)
+      });
+    } catch (err) {
+      alert("Error de red. Guardando localmente.");
+    }
   }
+  
+  // Update local model
+  db.privadas.push(newPriv);
+  const newHouses = [];
+  for (let i = 1; i <= totalCasas; i++) newHouses.push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
   db.casas[id] = newHouses;
   db.nominas[id] = [];
   db.projects[id] = [];
   
   db.activePrivadaId = id;
-  saveDB();
+  saveDBLocal();
   
   closeModal('modalAddPrivada');
-  populatePrivadaSelector();
-  showView('viewDashboard');
+  syncWithServer(); // refresh full state
   notify(`Privada "${nombre}" creada con éxito ✓`);
 }
 
@@ -1886,7 +1946,6 @@ function renderDashboard() {
   const deudaTotal = activeCasas.reduce((s, c) => s + totalCasa(c), 0);
   const activeTickets = db.tickets.filter(t => t.privadaId === activePriv.id && t.estado === 'Pendiente');
   
-  // Recaudado this month = total expected minus active debt
   const totalRecaudableEsperado = activeCasas.length * activePriv.cuotaBase;
   const mttoDeudaActual = activeCasas.reduce((s, c) => s + (c.adeudo || 0), 0);
   const recaudado = Math.max(0, totalRecaudableEsperado - mttoDeudaActual) + activeCasas.reduce((s, c) => s + (c.accesos || 0) + (c.receptor || 0), 0);
@@ -1897,7 +1956,6 @@ function renderDashboard() {
   document.getElementById('statTicketsPend').textContent = activeTickets.length;
   document.getElementById('statCasas').textContent = activeCasas.length;
   
-  // Render charts
   renderChartConceptos();
   renderChartDistribucion(recaudado, deudaTotal);
 }
@@ -1976,7 +2034,6 @@ function renderMapa() {
   }
   
   container.innerHTML = activeCasas.map(c => {
-    // Check if has pending tickets
     const hasPendingTicket = db.tickets.some(t => t.privadaId === db.activePrivadaId && t.casa === c.casa && t.estado === 'Pendiente');
     const badgeHtml = hasPendingTicket ? `<span class="house-lot-badge" title="Tiene pago pendiente por revisar"><i class="fa fa-ticket-alt"></i></span>` : '';
     
@@ -2012,11 +2069,9 @@ function openLotDrawer(casaNum) {
   const total = totalCasa(c);
   document.getElementById('drawerD_total').textContent = fmtNum(total);
   
-  // Show alert if has pending validations
   const hasPending = db.tickets.some(t => t.privadaId === db.activePrivadaId && t.casa === casaNum && t.estado === 'Pendiente');
   document.getElementById('drawerPendingSection').style.display = hasPending ? 'block' : 'none';
   
-  // Open panels
   document.getElementById('lotDrawerOverlay').classList.add('open');
   document.getElementById('lotDrawer').classList.add('open');
 }
@@ -2078,7 +2133,6 @@ function filterCuotasByStatus(v) {
   else if (v === 'moroso') renderCuotasTable(activeCasas.filter(c => totalCasa(c) >= 1000));
   else if (v === 'al_dia') renderCuotasTable(activeCasas.filter(c => totalCasa(c) === 0));
   else if (v === 'pendiente') {
-    // Show houses that have pending tickets
     const housesWithTickets = db.tickets.filter(t => t.privadaId === db.activePrivadaId && t.estado === 'Pendiente').map(t => t.casa);
     renderCuotasTable(activeCasas.filter(c => housesWithTickets.includes(c.casa)));
   }
@@ -2122,15 +2176,13 @@ function editCuota(casaNum) {
   openModal('modalCuota');
 }
 
-function saveCuota() {
-  const isEdit = document.getElementById('editCasaIndex').value !== '';
+async function saveCuota() {
   const casaNum = parseInt(document.getElementById('fCasa').value);
   const activeCasas = getCasas();
   const maxCasas = getActivePrivada().totalCasas;
   
   if (!casaNum || casaNum < 1 || casaNum > maxCasas) { alert(`Número de casa inválido (1-${maxCasas})`); return; }
   
-  let idx = activeCasas.findIndex(x => x.casa === casaNum);
   const data = {
     casa: casaNum,
     adeudo: parseFloat(document.getElementById('fAdeudo').value) || 0,
@@ -2140,34 +2192,54 @@ function saveCuota() {
     camaras: parseFloat(document.getElementById('fCamaras').value) || 0,
   };
   
-  if (idx >= 0) {
-    activeCasas[idx] = data;
-  } else {
-    activeCasas.push(data);
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/casas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privadaId: db.activePrivadaId, ...data })
+      });
+    } catch(e) {
+      alert("Error de red. Guardado localmente.");
+    }
   }
-  activeCasas.sort((a, b) => a.casa - b.casa);
+  
+  let idx = activeCasas.findIndex(x => x.casa === casaNum);
+  if (idx >= 0) activeCasas[idx] = data;
+  else activeCasas.push(data);
+  
   db.casas[db.activePrivadaId] = activeCasas;
-  saveDB();
+  saveDBLocal();
   
   closeModal('modalCuota');
-  renderCuotasTable(activeCasas);
-  if (currentView === 'viewDashboard') renderDashboard();
-  if (currentView === 'viewMapa') renderMapa();
+  syncWithServer(); // refresh state
   notify('Lote actualizado ✓');
 }
 
-function clearCuota(casaNum) {
+async function clearCuota(casaNum) {
   if (!confirm(`¿Condonar y registrar en ceros los saldos del Lote #${casaNum}?`)) return;
+  
+  const emptyData = { casa: casaNum, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 };
+  
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/casas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privadaId: db.activePrivadaId, ...emptyData })
+      });
+    } catch(e) {
+      alert("Error de red. Procesado local.");
+    }
+  }
+  
   const activeCasas = getCasas();
   const idx = activeCasas.findIndex(x => x.casa === casaNum);
-  if (idx >= 0) {
-    activeCasas[idx] = { casa: casaNum, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 };
-    db.casas[db.activePrivadaId] = activeCasas;
-    saveDB();
-  }
-  renderCuotasTable(activeCasas);
-  if (currentView === 'viewDashboard') renderDashboard();
-  if (currentView === 'viewMapa') renderMapa();
+  if (idx >= 0) activeCasas[idx] = emptyData;
+  db.casas[db.activePrivadaId] = activeCasas;
+  saveDBLocal();
+  
+  syncWithServer();
   notify(`Saldos Lote #${casaNum} liquidados ✓`);
 }
 
@@ -2207,7 +2279,6 @@ function analyzeImportData(text) {
   let validRowsCount = 0;
   
   rows.forEach(r => {
-    // split by tabs or commas
     const cells = r.split(/[\t,]+/);
     const casa = parseInt(cells[0]);
     if (!isNaN(casa) && casa > 0) validRowsCount++;
@@ -2219,14 +2290,14 @@ function analyzeImportData(text) {
   previewTxt.textContent = `Se detectaron ${validRowsCount} filas de datos de casas listas para importar a "${getActivePrivada().nombre}".`;
 }
 
-function processExcelImport() {
+async function processExcelImport() {
   const text = document.getElementById('excelRawText').value.trim();
   if (!text) { alert("Ingresa o pega datos primero"); return; }
   
   const rows = text.split('\n');
   const activeCasas = getCasas();
   const maxCasas = getActivePrivada().totalCasas;
-  let importedCount = 0;
+  const importRows = [];
   
   rows.forEach(r => {
     const cells = r.split(/[\t,]+/);
@@ -2234,33 +2305,44 @@ function processExcelImport() {
     
     if (isNaN(casaNum) || casaNum < 1 || casaNum > maxCasas) return;
     
-    // mapping cells: 1: Casa, 2: Mtto, 3: Multa, 4: Accesos, 5: Receptor, 6: Camaras
     const adeudo = parseFloat(cells[1]) || 0;
     const multa = parseFloat(cells[2]) || 0;
     const accesos = parseFloat(cells[3]) || 0;
     const receptor = parseFloat(cells[4]) || 0;
     const camaras = parseFloat(cells[5]) || 0;
     
-    const idx = activeCasas.findIndex(x => x.casa === casaNum);
-    if (idx >= 0) {
-      activeCasas[idx] = { casa: casaNum, adeudo, multa, accesos, receptor, camaras };
-      importedCount++;
-    }
+    importRows.push({ casa: casaNum, adeudo, multa, accesos, receptor, camaras });
   });
   
-  if (importedCount === 0) {
+  if (importRows.length === 0) {
     alert("No se pudieron importar filas. Revisa el formato.");
     return;
   }
   
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privadaId: db.activePrivadaId, rows: importRows })
+      });
+    } catch(e) {
+      alert("Error de red. Actualizando localmente.");
+    }
+  }
+  
+  // Local merge
+  importRows.forEach(ir => {
+    const idx = activeCasas.findIndex(x => x.casa === ir.casa);
+    if (idx >= 0) activeCasas[idx] = ir;
+  });
+  
   db.casas[db.activePrivadaId] = activeCasas;
-  saveDB();
+  saveDBLocal();
   
   closeModal('modalImportExcel');
-  renderCuotasTable(activeCasas);
-  if (currentView === 'viewDashboard') renderDashboard();
-  if (currentView === 'viewMapa') renderMapa();
-  notify(`Excel importado: ${importedCount} lotes actualizados ✓`);
+  syncWithServer();
+  notify(`Excel importado: ${importRows.length} lotes actualizados ✓`);
 }
 
 // ── TICKET VERIFICATION SYSTEM (VALIDAR PAGOS) ──────────────────────────────────────────
@@ -2272,7 +2354,6 @@ function renderValidacionesList() {
   
   if (!pending.length) {
     queue.innerHTML = `<div class="empty-state" style="padding: 24px;"><i class="fa fa-inbox"></i>Sin tickets enviados</div>`;
-    // reset viewer panel
     resetTicketViewer();
     return;
   }
@@ -2346,7 +2427,7 @@ function selectTicketForView(ticketId) {
       </div>
       <div class="receipt-row">
         <span class="receipt-label">Banco Emisor</span>
-        <span class="receipt-val">${t.banco || 'BBVA Bancomer'}</span>
+        <span class="receipt-val">${t.banco || 'BBVA México'}</span>
       </div>
       <div class="receipt-row">
         <span class="receipt-label">Beneficiario</span>
@@ -2383,42 +2464,43 @@ function resetTicketViewer() {
   `;
 }
 
-function approveTicket(ticketId) {
+async function approveTicket(ticketId) {
   const t = db.tickets.find(x => x.id === ticketId);
   if (!t) return;
   
   if (!confirm(`¿Aprobar transferencia por ${fmtNum(t.monto)} para el Lote #${t.casa}?`)) return;
   
-  // Deduct from the house's actual balance!
+  if (syncMode === 'online') {
+    try {
+      const res = await fetch('/api/tickets/approve', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId })
+      });
+      if (!res.ok) throw new Error("Approval failed");
+    } catch(e) {
+      alert("Error de conexión. Se procesará localmente.");
+    }
+  }
+  
+  // Local fallback calculations
   const activeCasas = db.casas[t.privadaId] || [];
   const c = activeCasas.find(x => x.casa === t.casa);
-  
   if (c) {
-    if (t.concepto === "Adeudo Mantenimiento") {
-      c.adeudo = Math.max(0, c.adeudo - t.monto);
-    } else if (t.concepto === "Multa") {
-      c.multa = Math.max(0, c.multa - t.monto);
-    } else if (t.concepto === "Pago Accesos") {
-      c.accesos = Math.max(0, c.accesos - t.monto);
-    } else if (t.concepto === "Pago Extra Receptor") {
-      c.receptor = Math.max(0, c.receptor - t.monto);
-    } else if (t.concepto === "1a Cuota Cámaras") {
-      c.camaras = Math.max(0, c.camaras - t.monto);
-    }
-    
-    db.casas[t.privadaId] = activeCasas;
+    if (t.concepto === "Adeudo Mantenimiento") c.adeudo = Math.max(0, c.adeudo - t.monto);
+    else if (t.concepto === "Multa") c.multa = Math.max(0, c.multa - t.monto);
+    else if (t.concepto === "Pago Accesos") c.accesos = Math.max(0, c.accesos - t.monto);
+    else if (t.concepto === "Pago Extra Receptor") c.receptor = Math.max(0, c.receptor - t.monto);
+    else if (t.concepto === "1a Cuota Cámaras") c.camaras = Math.max(0, c.camaras - t.monto);
   }
   
   t.estado = 'Aprobado';
   t.motivoRechazo = 'Aprobado por administración';
   
-  saveDB();
+  saveDBLocal();
   notify(`Pago Lote #${t.casa} aprobado y saldos actualizados ✓`);
   
-  // Refresh views
-  renderValidacionesList();
-  selectTicketForView(ticketId);
-  renderNav();
+  syncWithServer();
 }
 
 function rejectTicket(ticketId) {
@@ -2427,7 +2509,7 @@ function rejectTicket(ticketId) {
   openModal('modalRejectTicket');
 }
 
-function confirmRejectTicket() {
+async function confirmRejectTicket() {
   const ticketId = parseInt(document.getElementById('rejectTicketId').value);
   const reason = document.getElementById('rejectReasonText').value.trim();
   
@@ -2436,16 +2518,26 @@ function confirmRejectTicket() {
   const t = db.tickets.find(x => x.id === ticketId);
   if (!t) return;
   
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/tickets/reject', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId, reason })
+      });
+    } catch(e) {
+      alert("Error de red. Aplicado local.");
+    }
+  }
+  
   t.estado = 'Rechazado';
   t.motivoRechazo = reason;
   
-  saveDB();
+  saveDBLocal();
   closeModal('modalRejectTicket');
   notify(`Comprobante Lote #${t.casa} rechazado ✓`);
   
-  renderValidacionesList();
-  selectTicketForView(ticketId);
-  renderNav();
+  syncWithServer();
 }
 
 // ── STAFF PAYROLL AND EXPENSES (NOMINA) ──────────────────────────────────────────
@@ -2453,9 +2545,7 @@ function renderNominaView() {
   const privId = db.activePrivadaId;
   const staff = db.nominas[privId] || [];
   
-  // Calculate stats
   const totalMensual = staff.reduce((s, e) => {
-    // adjust to monthly salary estimation
     const factor = e.frecuencia === 'Quincenal' ? 2 : (e.frecuencia === 'Semanal' ? 4 : 1);
     return s + (e.sueldo * factor);
   }, 0);
@@ -2506,7 +2596,7 @@ function openAddEmployeeModal() {
   openModal('modalAddEmployee');
 }
 
-function saveNewEmployee() {
+async function saveNewEmployee() {
   const nombre = document.getElementById('empNombre').value.trim();
   const puesto = document.getElementById('empPuesto').value.trim();
   const sueldo = parseFloat(document.getElementById('empSueldo').value) || 0;
@@ -2515,22 +2605,38 @@ function saveNewEmployee() {
   if (!nombre || !puesto) { alert("Ingresa todos los campos"); return; }
   
   const privId = db.activePrivadaId;
-  if (!db.nominas[privId]) db.nominas[privId] = [];
-  
-  db.nominas[privId].push({
+  const newStaff = {
     id: Date.now(),
-    nombre, puesto, sueldo, frecuencia,
+    privadaId: privId,
+    nombre, puesto, sueldo, frecuencia
+  };
+  
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/nominas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStaff)
+      });
+    } catch(e) {
+      alert("Error de red. Agregado local.");
+    }
+  }
+  
+  if (!db.nominas[privId]) db.nominas[privId] = [];
+  db.nominas[privId].push({
+    ...newStaff,
     estadoPeriodo: 'Pendiente',
     historialPagos: []
   });
   
-  saveDB();
+  saveDBLocal();
   closeModal('modalAddEmployee');
-  renderNominaView();
+  syncWithServer();
   notify(`Empleado ${nombre} registrado con éxito ✓`);
 }
 
-function payEmployee(empId) {
+async function payEmployee(empId) {
   const privId = db.activePrivadaId;
   const staff = db.nominas[privId] || [];
   const emp = staff.find(x => x.id === empId);
@@ -2538,15 +2644,29 @@ function payEmployee(empId) {
   
   if (!confirm(`¿Confirmar el pago de nómina de ${fmtNum(emp.sueldo)} para ${emp.nombre}?`)) return;
   
-  emp.estadoPeriodo = 'Pagado';
-  emp.historialPagos.push({
+  const payment = {
     fecha: new Date().toISOString().split('T')[0],
     monto: emp.sueldo,
     folio: 'EGR-' + Math.floor(Math.random()*900000 + 100000)
-  });
+  };
   
-  saveDB();
-  renderNominaView();
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/nominas/pay', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: empId, payment })
+      });
+    } catch(e) {
+      alert("Error de red.");
+    }
+  }
+  
+  emp.estadoPeriodo = 'Pagado';
+  emp.historialPagos.push(payment);
+  
+  saveDBLocal();
+  syncWithServer();
   notify(`Nómina de ${emp.nombre} pagada con éxito ✓`);
 }
 
@@ -2558,7 +2678,6 @@ function viewPayrollVoucher(empId) {
   
   const lastPayment = emp.historialPagos[emp.historialPagos.length - 1];
   
-  // Custom modal visual or alert showing digital voucher slip
   const dialog = document.createElement('div');
   dialog.className = 'modal-overlay open';
   dialog.innerHTML = `
@@ -2602,9 +2721,6 @@ function viewPayrollVoucher(empId) {
             <strong style="color:var(--green-700); font-weight:800;">${fmtNum(lastPayment.monto)}</strong>
           </div>
         </div>
-        <div style="text-align:center; margin-top:14px; font-size:12px; color:var(--gray-500)">
-          Autorizado electrónicamente por la administración de Privada ${getActivePrivada().nombre}.
-        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary" id="btnOkPayroll">Entendido</button>
@@ -2618,12 +2734,21 @@ function viewPayrollVoucher(empId) {
   dialog.querySelector('#btnOkPayroll').onclick = close;
 }
 
-function deleteEmployee(empId) {
+async function deleteEmployee(empId) {
   if (!confirm("¿Seguro que deseas eliminar este empleado de la plantilla de nómina?")) return;
   const privId = db.activePrivadaId;
+  
+  if (syncMode === 'online') {
+    try {
+      await fetch(`/api/nominas/${empId}`, { method: 'DELETE' });
+    } catch(e) {
+      alert("Error.");
+    }
+  }
+  
   db.nominas[privId] = (db.nominas[privId] || []).filter(e => e.id !== empId);
-  saveDB();
-  renderNominaView();
+  saveDBLocal();
+  syncWithServer();
   notify("Empleado eliminado ✓");
 }
 
@@ -2670,26 +2795,38 @@ function openAddProjectModal() {
   openModal('modalProject');
 }
 
-function saveProject() {
+async function saveProject() {
   const nombre = document.getElementById('pNombre').value.trim();
   if (!nombre) { alert('Ingresa el nombre del proyecto'); return; }
   
   const privId = db.activePrivadaId;
-  if (!db.projects[privId]) db.projects[privId] = [];
-  
-  db.projects[privId].push({
+  const newProj = {
     id: Date.now(),
+    privadaId: privId,
     nombre,
     presupuesto: parseFloat(document.getElementById('pPresupuesto').value) || 0,
     ejecutado: parseFloat(document.getElementById('pEjecutado').value) || 0,
     inicio: document.getElementById('pFechaInicio').value,
     fin: document.getElementById('pFechaFin').value,
     estado: document.getElementById('pEstado').value,
-  });
+  };
   
-  saveDB();
-  closeModal('modalProject');
-  renderProjects();
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProj)
+      });
+    } catch(e) {
+      alert("Error.");
+    }
+  }
+  
+  if (!db.projects[privId]) db.projects[privId] = [];
+  db.projects[privId].push(newProj);
+  saveDBLocal();
+  syncWithServer();
   notify('Proyecto registrado ✓');
 }
 
@@ -2770,7 +2907,6 @@ function loadTenantView(casaNum) {
   document.getElementById('tenantName').textContent = `Lote Residente #${c.casa}`;
   document.getElementById('tenantBadgeNum').textContent = c.casa;
   
-  // Set amounts
   const total = totalCasa(c);
   
   const setCard = (el, val, cls) => {
@@ -2798,11 +2934,9 @@ function loadTenantView(casaNum) {
     </tr>
   `).join('');
   
-  // Set date field to today by default
   document.getElementById('tFecha').value = new Date().toISOString().split('T')[0];
   document.getElementById('tMonto').value = total > 0 ? total : getActivePrivada().cuotaBase;
   
-  // Load tenant validation history
   loadTenantHistoryTable(casaNum);
 }
 
@@ -2822,7 +2956,7 @@ function simulateTicketUpload() {
   document.getElementById('ticketUploadLabel').style.color = "var(--green-700)";
 }
 
-function submitTicket() {
+async function submitTicket() {
   const casaSelect = document.getElementById('tenantSelect');
   const casaNum = parseInt(casaSelect.value);
   if (!casaNum) return;
@@ -2838,28 +2972,42 @@ function submitTicket() {
   if (!folio) { alert("Ingresa el Folio / Clave de Rastreo SPEI"); return; }
   if (!hasFile) { alert("Por favor haz clic en cargar comprobante para simular la captura de pantalla bancaria."); return; }
   
-  db.tickets.push({
+  const newTicket = {
     id: Date.now(),
     privadaId: db.activePrivadaId,
     casa: casaNum,
     concepto, monto, folio, fecha, banco,
-    imagenMock: true,
+    imagenMock: true
+  };
+  
+  if (syncMode === 'online') {
+    try {
+      await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTicket)
+      });
+    } catch(e) {
+      alert("Error.");
+    }
+  }
+  
+  db.tickets.push({
+    ...newTicket,
     estado: 'Pendiente',
     motivoRechazo: ''
   });
   
-  saveDB();
+  saveDBLocal();
   
-  // Reset form
   document.getElementById('tFolio').value = '';
   document.getElementById('tSimulatedFile').value = '0';
   document.getElementById('ticketUploadLabel').textContent = "Hacer Clic para simular carga de ticket (SPEI.png)";
   document.getElementById('ticketUploadLabel').style.color = "var(--gray-600)";
   
   notify("Comprobante SPEI enviado a revisión ✓");
-  loadTenantHistoryTable(casaNum);
-  switchTenantSubTab('history');
-  renderNav();
+  
+  syncWithServer();
 }
 
 function loadTenantHistoryTable(casaNum) {
@@ -2901,9 +3049,9 @@ function notify(msg) {
 
 // ── INITIALIZATION ────────────────────────────────────────────────
 document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' });
-populatePrivadaSelector();
-renderNav();
-renderDashboard();
+
+// Initiate Real-Time DB sync with Neon.tech
+syncWithServer();
 
 // close modal on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el => {
