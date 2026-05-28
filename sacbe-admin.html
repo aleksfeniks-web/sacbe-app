@@ -871,9 +871,134 @@
     max-width: 450px;
     margin: 16px auto;
   }
+
+  /* SPLASH SCREEN PREMIUM OVERLAY */
+  .splash-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0b0f12; /* Dark immersive background matching neon colors */
+    z-index: 999999; /* Higher than everything */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.8s cubic-bezier(0.77, 0, 0.175, 1), visibility 0.8s;
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .splash-overlay.fade-out {
+    opacity: 0;
+    visibility: hidden;
+  }
+  
+  .splash-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  
+  .splash-logo-container {
+    width: 280px;
+    height: 280px;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.25);
+    margin-bottom: 24px;
+    animation: logoGlowPulse 3s ease-in-out infinite, logoFlickerOn 1.5s ease-out 1;
+    background-color: #000000;
+    border: 1.5px solid rgba(16, 185, 129, 0.15);
+  }
+  
+  .splash-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .splash-loader-bar {
+    width: 220px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+  }
+  
+  .splash-loader-progress {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399); /* Green neon gradients */
+    box-shadow: 0 0 10px #10b981;
+    border-radius: 10px;
+    animation: progressFill 2.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  }
+  
+  .splash-status-text {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: #a7f3d0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    animation: textPulse 1.8s ease-in-out infinite;
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+  
+  /* KEYFRAMES FOR LOGO FLICKERING AND GLOWING */
+  @keyframes logoFlickerOn {
+    0% { opacity: 0.1; filter: brightness(0.3); }
+    10% { opacity: 0.8; filter: brightness(1.2); }
+    15% { opacity: 0.3; filter: brightness(0.5); }
+    22% { opacity: 0.9; filter: brightness(1.1); }
+    28% { opacity: 0.4; filter: brightness(0.6); }
+    35% { opacity: 1; filter: brightness(1); }
+  }
+  
+  @keyframes logoGlowPulse {
+    0%, 100% {
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.25);
+      border-color: rgba(16, 185, 129, 0.15);
+    }
+    50% {
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 45px rgba(16, 185, 129, 0.45);
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+  }
+  
+  @keyframes progressFill {
+    0% { width: 0%; }
+    20% { width: 15%; }
+    50% { width: 65%; }
+    80% { width: 90%; }
+    100% { width: 100%; }
+  }
+  
+  @keyframes textPulse {
+    0%, 100% { opacity: 0.65; }
+    50% { opacity: 1; }
+  }
 </style>
 </head>
 <body>
+
+<!-- SPLASH SCREEN OVERLAY (VALOR ADMINISTRACIÓN LOGO ANIMADO) -->
+<div id="sacbeSplash" class="splash-overlay">
+  <div class="splash-content">
+    <div class="splash-logo-container">
+      <img src="logo.jpg" class="splash-logo" alt="Valor Administración">
+    </div>
+    <div class="splash-loader-bar">
+      <div class="splash-loader-progress"></div>
+    </div>
+    <div class="splash-status-text">Iniciando plataforma residencial...</div>
+  </div>
+</div>
 
 <div class="app">
   <!-- SIDEBAR -->
@@ -1685,6 +1810,16 @@ async function syncWithServer() {
   populatePrivadaSelector();
   renderNav();
   showView(currentView);
+  
+  // Ocultar Splash Screen de forma suave y elegante tras la sincronización
+  setTimeout(dismissSplash, 1200);
+}
+
+function dismissSplash() {
+  const splash = document.getElementById('sacbeSplash');
+  if (splash) {
+    splash.classList.add('fade-out');
+  }
 }
 
 function saveDBLocal() {
