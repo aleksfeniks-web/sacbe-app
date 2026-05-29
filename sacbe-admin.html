@@ -983,6 +983,343 @@
     0%, 100% { opacity: 0.65; }
     50% { opacity: 1; }
   }
+
+  /* Desktop defaults */
+  .mobile-menu-btn { display: none; }
+  .sidebar-overlay { display: none; }
+
+  /* ── RESPONSIVE / MOBILE PORTAL ────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    /* Base responsive layout structure */
+    .app {
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    .sidebar {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: -260px;
+      z-index: 1000;
+      width: 260px;
+      background: linear-gradient(180deg, var(--green-900) 0%, #011813 100%);
+      box-shadow: 10px 0 30px rgba(0, 0, 0, 0.35);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .sidebar.open {
+      transform: translateX(260px);
+    }
+    
+    /* Elegant Sidebar overlay when open */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    
+    .sidebar-overlay.active {
+      display: block;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .main {
+      margin-left: 0 !important;
+      width: 100%;
+      min-width: 0;
+    }
+    
+    /* Topbar adjustments */
+    .topbar {
+      padding: 0 16px;
+      height: 64px;
+    }
+    
+    .topbar-title-wrapper {
+      margin-left: 8px;
+    }
+    
+    .topbar-title {
+      font-size: 16px;
+    }
+    
+    .topbar-subtitle {
+      font-size: 10px;
+    }
+    
+    .topbar-right {
+      gap: 8px;
+    }
+    
+    .date-badge, .sync-badge {
+      display: none !important; /* Hide non-critical badges in small width to avoid overlap */
+    }
+    
+    .topbar-right .btn-sm {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+    
+    /* Mobile Hamburger Menu Button */
+    .mobile-menu-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      color: var(--green-900);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 18px;
+      transition: var(--transition);
+    }
+    
+    .mobile-menu-btn:hover {
+      background: var(--green-50);
+      color: var(--green-700);
+      border-color: var(--green-200);
+    }
+    
+    /* General content padding reduction */
+    .content {
+      padding: 16px;
+    }
+    
+    /* ── TENANT VIEW IN MOBILE ── */
+    
+    /* Lot Selector Container */
+    #viewTenant > div:first-of-type {
+      flex-direction: column;
+      align-items: stretch !important;
+      gap: 10px !important;
+      padding: 16px !important;
+      margin-bottom: 16px !important;
+    }
+    
+    #viewTenant > div:first-of-type label {
+      margin-bottom: 2px;
+    }
+    
+    #tenantSelect {
+      width: 100%;
+    }
+    
+    /* Tenant header layout on mobile */
+    .tenant-header {
+      flex-direction: column-reverse;
+      gap: 16px;
+      text-align: center;
+      padding: 24px 16px;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--green-900) 0%, var(--green-700) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      box-shadow: 0 10px 25px rgba(2, 44, 34, 0.15);
+    }
+    
+    .tenant-header h2 {
+      font-size: 20px;
+    }
+    
+    .tenant-header p {
+      font-size: 12px;
+    }
+    
+    .tenant-casa-badge {
+      width: 64px;
+      height: 64px;
+      font-size: 26px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    /* Native App-Style Horizontal Scrollable Tabs */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(226, 232, 240, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(226, 232, 240, 0.5);
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      width: 100%;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 20px;
+      /* Hide standard scrollbars */
+      scrollbar-width: none; /* Firefox */
+    }
+    
+    .tabs::-webkit-scrollbar {
+      display: none; /* Safari and Chrome */
+    }
+    
+    .tab-btn {
+      flex: 0 0 auto;
+      padding: 8px 14px;
+      font-size: 12.5px;
+    }
+    
+    /* Stacked balances grid with gorgeous subtle colors */
+    .cuotas-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .cuota-card {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: var(--transition);
+    }
+    
+    .cuota-card.ok {
+      background: linear-gradient(135deg, #ffffff 0%, var(--green-50) 100%);
+      border-left: 4px solid var(--green-500);
+    }
+    
+    .cuota-card.pending {
+      background: linear-gradient(135deg, #ffffff 0%, var(--amber-50) 100%);
+      border-left: 4px solid var(--amber-400);
+    }
+    
+    .cuota-card.debt {
+      background: linear-gradient(135deg, #ffffff 0%, var(--red-50) 100%);
+      border-left: 4px solid var(--red-400);
+    }
+    
+    .cuota-card .cuota-label {
+      margin-bottom: 0;
+      font-size: 10.5px;
+    }
+    
+    .cuota-card .cuota-val {
+      font-size: 20px;
+    }
+    
+    /* Premium Table to Card transformations */
+    #tenantSubTabEstado table,
+    #tenantSubTabEstado thead,
+    #tenantSubTabEstado tbody,
+    #tenantSubTabEstado th,
+    #tenantSubTabEstado td,
+    #tenantSubTabEstado tr,
+    #tenantSubTabHistory table,
+    #tenantSubTabHistory thead,
+    #tenantSubTabHistory tbody,
+    #tenantSubTabHistory th,
+    #tenantSubTabHistory td,
+    #tenantSubTabHistory tr {
+      display: block;
+    }
+    
+    #tenantSubTabEstado thead,
+    #tenantSubTabHistory thead {
+      display: none;
+    }
+    
+    #tenantSubTabEstado tr,
+    #tenantSubTabHistory tr {
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    
+    #tenantSubTabEstado td,
+    #tenantSubTabHistory td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1.5px solid var(--gray-50);
+      font-size: 13px;
+    }
+    
+    #tenantSubTabEstado td:last-child,
+    #tenantSubTabHistory td:last-child {
+      border-bottom: none;
+    }
+    
+    /* Injected labels */
+    #tenantSubTabEstado td::before,
+    #tenantSubTabHistory td::before {
+      content: attr(data-label);
+      font-weight: 700;
+      color: var(--gray-400);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    /* Align specific amount cells */
+    #tenantSubTabEstado td.amount-cell,
+    #tenantSubTabHistory td.amount-cell {
+      font-weight: 700;
+    }
+    
+    /* Form optimizations */
+    #tenantSubTabTransfer .card {
+      padding: 16px !important;
+    }
+    
+    #tenantSubTabTransfer .card-title {
+      font-size: 15px;
+      margin-bottom: 10px !important;
+    }
+    
+    #tenantSubTabTransfer p {
+      font-size: 12px;
+      margin-bottom: 16px !important;
+    }
+    
+    .form-row {
+      grid-template-columns: 1fr;
+      gap: 0;
+      margin-bottom: 0;
+    }
+    
+    .form-group {
+      margin-bottom: 14px;
+    }
+    
+    .form-control {
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+    
+    .excel-import-box {
+      padding: 24px 16px;
+    }
+    
+    /* Make button controls stack on mobile */
+    #tenantSubTabTransfer div[style*="justify-content:flex-end"] {
+      flex-direction: column-reverse;
+      gap: 8px !important;
+      margin-top: 16px;
+      display: flex;
+    }
+    
+    #tenantSubTabTransfer div[style*="justify-content:flex-end"] .btn {
+      width: 100%;
+      justify-content: center;
+      padding: 12px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -999,6 +1336,9 @@
     <div class="splash-status-text">Iniciando plataforma residencial...</div>
   </div>
 </div>
+
+<!-- SIDEBAR MOBILE OVERLAY -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
 
 <div class="app">
   <!-- SIDEBAR -->
@@ -1038,6 +1378,9 @@
   <!-- MAIN CONTAINER -->
   <div class="main">
     <div class="topbar">
+      <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Abrir menú lateral">
+        <i class="fa fa-bars"></i>
+      </button>
       <div class="topbar-title-wrapper">
         <span class="topbar-title" id="topbarTitle">Dashboard</span>
         <span class="topbar-subtitle" id="topbarSubtitle">Privada Ceiba</span>
@@ -1989,7 +2332,24 @@ function performSwitchRole(role) {
   }
 }
 
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar && overlay) {
+    const isOpen = sidebar.classList.toggle('open');
+    overlay.classList.toggle('active', isOpen);
+  }
+}
+
 function showView(viewId) {
+  // Close mobile sidebar if open
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar && sidebar.classList.contains('open')) {
+    sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+  }
+
   currentView = viewId;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(viewId).classList.add('active');
@@ -3111,9 +3471,9 @@ function loadTenantView(casaNum) {
   
   document.getElementById('tenantDetailBody').innerHTML = conceptos.map(x => `
     <tr>
-      <td>${x.label}</td>
-      <td class="amount-cell ${x.val > 0 ? 'amount-pos' : 'amount-zero'}">${x.val > 0 ? fmtNum(x.val) : '-'}</td>
-      <td>${x.val > 0 ? '<span class="badge badge-danger">Pendiente</span>' : '<span class="badge badge-ok">Cubierto</span>'}</td>
+      <td data-label="Concepto">${x.label}</td>
+      <td data-label="Monto" class="amount-cell ${x.val > 0 ? 'amount-pos' : 'amount-zero'}">${x.val > 0 ? fmtNum(x.val) : '-'}</td>
+      <td data-label="Estado">${x.val > 0 ? '<span class="badge badge-danger">Pendiente</span>' : '<span class="badge badge-ok">Cubierto</span>'}</td>
     </tr>
   `).join('');
   
@@ -3227,12 +3587,12 @@ function loadTenantHistoryTable(casaNum) {
     const statusCls = t.estado === 'Pendiente' ? 'badge-warn' : (t.estado === 'Aprobado' ? 'badge-ok' : 'badge-danger');
     return `
       <tr>
-        <td>${t.fecha}</td>
-        <td><strong>${t.concepto}</strong></td>
-        <td class="amount-cell" style="color:var(--green-700);">${fmtNum(t.monto)}</td>
-        <td><span style="font-family:monospace;">${t.folio}</span></td>
-        <td><span class="badge ${statusCls}">${statusText}</span></td>
-        <td><span style="font-size:12px; color:var(--gray-500);">${t.motivoRechazo || '-'}</span></td>
+        <td data-label="Fecha">${t.fecha}</td>
+        <td data-label="Concepto"><strong>${t.concepto}</strong></td>
+        <td data-label="Monto" class="amount-cell" style="color:var(--green-700);">${fmtNum(t.monto)}</td>
+        <td data-label="Folio SPEI"><span style="font-family:monospace;">${t.folio}</span></td>
+        <td data-label="Estatus"><span class="badge ${statusCls}">${statusText}</span></td>
+        <td data-label="Nota de Validación"><span style="font-size:12px; color:var(--gray-500);">${t.motivoRechazo || '-'}</span></td>
       </tr>
     `;
   }).join('');
