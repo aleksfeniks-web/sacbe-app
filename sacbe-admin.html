@@ -1319,6 +1319,106 @@
       justify-content: center;
       padding: 12px;
     }
+
+    /* Dashboard Mobile Overrides */
+    .dashboard-charts-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    
+    .viewDashboard .stats-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    
+    .viewDashboard .stat-card {
+      padding: 16px 20px;
+    }
+    
+    .viewDashboard .stat-card .stat-label {
+      font-size: 10px;
+      margin-bottom: 6px;
+    }
+    
+    .viewDashboard .stat-card .stat-value {
+      font-size: 22px;
+    }
+    
+    .viewDashboard .stat-card.interactive-card::after {
+      display: none; /* Hide interactive arrow on mobile to save space */
+    }
+  }
+
+  /* ── DASHBOARD PREMIUM CHART GRID & CHART TOGGLER ───────────────────── */
+  .dashboard-charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  
+  .chart-type-selector {
+    display: flex;
+    background: var(--gray-100);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200);
+  }
+  
+  .chart-type-btn {
+    background: transparent;
+    border: none;
+    color: var(--gray-400);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .chart-type-btn.active {
+    background: #fff;
+    color: var(--green-700);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+  
+  .chart-type-btn:hover:not(.active) {
+    color: var(--gray-700);
+  }
+  
+  /* Staging interactive card styles */
+  .stat-card.interactive-card {
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .stat-card.interactive-card::after {
+    content: '\f105';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    font-size: 14px;
+    color: var(--gray-300);
+    transition: var(--transition);
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  
+  .stat-card.interactive-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .stat-card.interactive-card:hover::after {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--green-600);
   }
 </style>
 </head>
@@ -1401,31 +1501,36 @@
       <!-- ── VIEW: DASHBOARD ── -->
       <div class="view active" id="viewDashboard">
         <div class="stats-grid">
-          <div class="stat-card green">
+          <div class="stat-card green interactive-card" onclick="notify('Fondo total colectado en la privada activa ✓')" title="Hacer clic para ver detalles">
             <div class="stat-label">Total Recaudado</div>
             <div class="stat-value" id="statRecaudado">$0</div>
             <div class="stat-sub" id="statRecaudadoMes"><i class="fa fa-circle-check"></i> Mayo 2026</div>
           </div>
-          <div class="stat-card red">
+          <div class="stat-card red interactive-card" onclick="goToCuotasWithFilter('moroso')" title="Ir a control de cuotas morosas">
             <div class="stat-label">Deuda Condominal</div>
             <div class="stat-value" id="statDeuda">$0</div>
             <div class="stat-sub" id="statDeudaCasas">0 lotes morosos</div>
           </div>
-          <div class="stat-card amber">
+          <div class="stat-card amber interactive-card" onclick="showView('viewValidaciones')" title="Validar comprobantes SPEI">
             <div class="stat-label">Tickets por Revisar</div>
             <div class="stat-value" id="statTicketsPend">0</div>
             <div class="stat-sub" id="statTicketsText">Pendientes de validar</div>
           </div>
-          <div class="stat-card blue">
+          <div class="stat-card blue interactive-card" onclick="showView('viewMapa')" title="Ver mapa de lotes">
             <div class="stat-label">Lotes Totales</div>
             <div class="stat-value" id="statCasas">88</div>
             <div class="stat-sub" id="statFondoMensual">Fondo activo</div>
           </div>
         </div>
-        <div class="stats-grid" style="grid-template-columns: 2fr 1fr; gap: 24px;">
+        <div class="dashboard-charts-grid">
           <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
               <span class="card-title">Recaudación por Concepto (Fondo Actual)</span>
+              <div class="chart-type-selector">
+                <button class="chart-type-btn active" id="btnChartBar" onclick="switchConceptChartType('bar')" title="Barras Verticales"><i class="fa fa-chart-bar"></i></button>
+                <button class="chart-type-btn" id="btnChartHorizontalBar" onclick="switchConceptChartType('horizontalBar')" title="Barras Horizontales"><i class="fa fa-align-left"></i></button>
+                <button class="chart-type-btn" id="btnChartLine" onclick="switchConceptChartType('line')" title="Línea de Tendencia"><i class="fa fa-chart-line"></i></button>
+              </div>
             </div>
             <div class="chart-wrap">
               <div style="position:relative;height:260px">
@@ -1467,7 +1572,7 @@
             <span class="card-title">Control de cuotas condominales</span>
             <div class="card-tools">
               <input class="search-input" type="text" placeholder="Buscar casa..." oninput="filterCuotasTable(this.value)">
-              <select class="filter-select" onchange="filterCuotasByStatus(this.value)">
+              <select class="filter-select" id="cuotasStatusFilter" onchange="filterCuotasByStatus(this.value)">
                 <option value="all">Ver Todos</option>
                 <option value="moroso">Morosos</option>
                 <option value="al_dia">Al día</option>
@@ -2477,6 +2582,29 @@ function renderDashboard() {
   renderChartDistribucion(recaudado, deudaTotal);
 }
 
+let activeConceptChartType = 'bar'; // Global session state
+
+function switchConceptChartType(type) {
+  activeConceptChartType = type;
+  
+  // Update segment button active state
+  document.querySelectorAll('.chart-type-btn').forEach(btn => btn.classList.remove('active'));
+  if (type === 'bar') document.getElementById('btnChartBar').classList.add('active');
+  if (type === 'horizontalBar') document.getElementById('btnChartHorizontalBar').classList.add('active');
+  if (type === 'line') document.getElementById('btnChartLine').classList.add('active');
+  
+  renderChartConceptos();
+}
+
+function goToCuotasWithFilter(statusFilter) {
+  showView('viewCuotas');
+  const sel = document.getElementById('cuotasStatusFilter');
+  if (sel) {
+    sel.value = statusFilter;
+    filterCuotasByStatus(statusFilter);
+  }
+}
+
 function renderChartConceptos() {
   const activeCasas = getCasas();
   const totAdeudo = activeCasas.reduce((s, c) => s + (c.adeudo || 0), 0);
@@ -2490,8 +2618,27 @@ function renderChartConceptos() {
   const ctx = document.getElementById('chartConceptos');
   if (!ctx) return;
   
+  const isHorizontal = activeConceptChartType === 'horizontalBar';
+  const cType = isHorizontal ? 'bar' : activeConceptChartType;
+  
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: { color: '#f1f5f9' }, ticks: { callback: v => '$' + v.toLocaleString('es-MX') } }
+    }
+  };
+  
+  if (isHorizontal) {
+    options.indexAxis = 'y';
+    options.scales.x = { grid: { color: '#f1f5f9' }, ticks: { callback: v => '$' + v.toLocaleString('es-MX') } };
+    options.scales.y = { grid: { display: false } };
+  }
+  
   chartConceptosInst = new Chart(ctx, {
-    type: 'bar',
+    type: cType,
     data: {
       labels: ['Mtto Base', 'Multas', 'Accesos $816', 'Receptor $35', 'Cámaras $600'],
       datasets: [{
@@ -2502,14 +2649,7 @@ function renderChartConceptos() {
         borderSkipped: false,
       }]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { callback: v => '$' + v.toLocaleString('es-MX') } }
-      }
-    }
+    options: options
   });
 }
 
