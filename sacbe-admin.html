@@ -1721,6 +1721,7 @@
             <button class="tab-btn active" id="tabTenantEstado" onclick="switchTenantSubTab('estado')">Mi Estado de Cuenta</button>
             <button class="tab-btn" id="tabTenantTransfer" onclick="switchTenantSubTab('transfer')">Subir Comprobante de Pago</button>
             <button class="tab-btn" id="tabTenantHistory" onclick="switchTenantSubTab('history')">Historial de Validaciones</button>
+            <button class="tab-btn" id="tabTenantRecibos" onclick="switchTenantSubTab('recibos')">Mis Recibos</button>
           </div>
           
           <!-- Tenant Sub-Tab: Estado de Cuenta -->
@@ -1834,6 +1835,31 @@
                     <th>Nota de Validación</th>
                   </tr></thead>
                   <tbody id="tenantHistoryTableBody">
+                    <!-- Loaded dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Tenant Sub-Tab: Mis Recibos -->
+          <div id="tenantSubTabRecibos" style="display:none;">
+            <div class="card">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="card-title">Mis Recibos Digitales Aprobados</span>
+                <span style="font-size:12px; color:var(--gray-500); font-weight:500;">Generación Oficial de Recibo PDF</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>Fecha Aprobación</th>
+                    <th>Concepto</th>
+                    <th>Monto</th>
+                    <th>Folio SPEI</th>
+                    <th>Emitido Por</th>
+                    <th style="text-align:center;">Acción</th>
+                  </tr></thead>
+                  <tbody id="tenantRecibosTableBody">
                     <!-- Loaded dynamically -->
                   </tbody>
                 </table>
@@ -2176,6 +2202,7 @@
 <div class="notif" id="notif"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ── LOCAL FALLBACK SEED DATA (IN-MEMORY fallback if offline) ──────────────────────────────────────────
 let localFallbackDb = {
@@ -2188,7 +2215,8 @@ let localFallbackDb = {
   },
   tickets: [],
   nominas: { "ceiba": [] },
-  projects: { "ceiba": [] }
+  projects: { "ceiba": [] },
+  recibos: []
 };
 
 for (let i = 1; i <= 88; i++) localFallbackDb.casas["ceiba"].push({ casa: i, adeudo: 0, multa: 0, accesos: 0, receptor: 0, camaras: 0 });
@@ -2200,7 +2228,8 @@ let db = {
   casas: {},
   tickets: [],
   nominas: {},
-  projects: {}
+  projects: {},
+  recibos: []
 };
 
 let syncMode = 'offline'; // 'offline' or 'online'
@@ -2225,6 +2254,7 @@ async function syncWithServer() {
     db.tickets = serverDb.tickets;
     db.nominas = serverDb.nominas;
     db.projects = serverDb.projects;
+    db.recibos = serverDb.recibos || [];
     
     syncMode = 'online';
     badge.className = "sync-badge active";
@@ -2249,7 +2279,8 @@ async function syncWithServer() {
         casas: localFallbackDb.casas,
         tickets: [],
         nominas: localFallbackDb.nominas,
-        projects: localFallbackDb.projects
+        projects: localFallbackDb.projects,
+        recibos: []
       };
     }
   }
@@ -3180,6 +3211,23 @@ async function approveTicket(ticketId) {
   t.estado = 'Aprobado';
   t.motivoRechazo = 'Aprobado por administración';
   
+  // Create offline receipt
+  if (!db.recibos) db.recibos = [];
+  const exists = db.recibos.some(x => x.ticketId === t.id);
+  if (!exists) {
+    db.recibos.push({
+      id: Date.now(),
+      ticketId: t.id,
+      privadaId: t.privadaId,
+      casa: t.casa,
+      concepto: t.concepto,
+      monto: t.monto,
+      folio: t.folio,
+      fecha: t.fecha,
+      creadoPor: 'Administración Valor'
+    });
+  }
+  
   saveDBLocal();
   notify(`Pago Lote #${t.casa} aprobado y saldos actualizados ✓`);
   
@@ -3621,16 +3669,19 @@ function loadTenantView(casaNum) {
   document.getElementById('tMonto').value = total > 0 ? total : getActivePrivada().cuotaBase;
   
   loadTenantHistoryTable(casaNum);
+  loadTenantRecibosTable(casaNum);
 }
 
 function switchTenantSubTab(tab) {
   document.getElementById('tenantSubTabEstado').style.display = tab === 'estado' ? 'block' : 'none';
   document.getElementById('tenantSubTabTransfer').style.display = tab === 'transfer' ? 'block' : 'none';
   document.getElementById('tenantSubTabHistory').style.display = tab === 'history' ? 'block' : 'none';
+  document.getElementById('tenantSubTabRecibos').style.display = tab === 'recibos' ? 'block' : 'none';
   
   document.getElementById('tabTenantEstado').classList.toggle('active', tab === 'estado');
   document.getElementById('tabTenantTransfer').classList.toggle('active', tab === 'transfer');
   document.getElementById('tabTenantHistory').classList.toggle('active', tab === 'history');
+  document.getElementById('tabTenantRecibos').classList.toggle('active', tab === 'recibos');
 }
 
 function triggerTicketFileInput() {
@@ -3753,6 +3804,381 @@ function notify(msg) {
   n.textContent = msg;
   n.style.display = 'block';
   setTimeout(() => n.style.display = 'none', 3000);
+}
+
+async function getBase64ImageFromUrl(imageUrl) {
+  var res = await fetch(imageUrl);
+  var blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    var reader = new FileReader();
+    reader.onloadend = function() {
+        resolve(reader.result);
+    }
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function montoALetra(num) {
+  const unidades = ["", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE"];
+  const decenas = ["", "DIEZ", "VEINTE", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
+  const especiales = ["diez_y_cero", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISEIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE"];
+  const centenas = ["", "CIENTO", "DOSCIENTOS", "TRESCIENTOS", "CUATROCIENTOS", "QUINIENTOS", "SEISCIENTOS", "SETECIENTOS", "OCHECIENTOS", "NOVECIENTOS"];
+
+  function convertirGrupo(n) {
+    let output = "";
+    if (n >= 100) {
+      if (n === 100) return "CIEN";
+      output += centenas[Math.floor(n / 100)] + " ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      if (n === 20) return output + "VEINTE";
+      if (n < 30) {
+        output += "VEINTI" + unidades[n - 20];
+      } else {
+        output += decenas[Math.floor(n / 10)] + (n % 10 > 0 ? " Y " + unidades[n % 10] : "");
+      }
+    } else if (n >= 10) {
+      output += especiales[n - 10];
+    } else if (n > 0) {
+      output += unidades[n];
+    }
+    return output.trim();
+  }
+
+  const cents = Math.round((num % 1) * 100);
+  const intVal = Math.floor(num);
+  let text = "";
+
+  if (intVal === 0) {
+    text = "CERO";
+  } else if (intVal === 1000) {
+    text = "MIL";
+  } else if (intVal > 1000) {
+    const miles = Math.floor(intVal / 1000);
+    const resto = intVal % 1000;
+    const milesText = miles === 1 ? "MIL" : convertirGrupo(miles) + " MIL";
+    text = milesText + " " + convertirGrupo(resto);
+  } else {
+    text = convertirGrupo(intVal);
+  }
+
+  const centsStr = cents.toString().padStart(2, "0");
+  return `(${text.trim()} PESOS ${centsStr}/100 M.N.)`;
+}
+
+function loadTenantRecibosTable(casaNum) {
+  const tbody = document.getElementById('tenantRecibosTableBody');
+  const userRecibos = (db.recibos || []).filter(r => r.privadaId === db.activePrivadaId && r.casa == casaNum);
+  
+  if (!userRecibos.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state" style="padding:20px;"><i class="fa fa-info-circle"></i>No se han generado recibos de pago aún.</div></td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = userRecibos.map(r => {
+    return `
+      <tr>
+        <td data-label="Fecha Aprobación">${r.fecha || '-'}</td>
+        <td data-label="Concepto"><strong>${r.concepto}</strong></td>
+        <td data-label="Monto" class="amount-cell" style="color:var(--green-700); font-weight: 600;">${fmtNum(r.monto)}</td>
+        <td data-label="Folio SPEI"><span style="font-family:monospace;">${r.folio}</span></td>
+        <td data-label="Emitido Por"><span style="font-size:12px; color:var(--gray-600);">${r.creadoPor || 'Administración Valor'}</span></td>
+        <td data-label="Acción" style="text-align:center;">
+          <button class="btn btn-outline" style="padding: 4px 8px; font-size:12px; border-color:var(--green-600); color:var(--green-700);" onclick="downloadPDFReceipt(${r.id})">
+            <i class="fa fa-download"></i> Descargar PDF
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function downloadPDFReceipt(receiptId) {
+  const r = (db.recibos || []).find(x => x.id === receiptId);
+  if (!r) { alert("Recibo no encontrado"); return; }
+
+  notify("Generando recibo PDF...");
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a5'
+    });
+
+    const privada = db.privadas.find(p => p.id === r.privadaId) || { nombre: "Privada Sacbé" };
+    const privadaName = privada.nombre;
+
+    let imgData = null;
+    try {
+      imgData = await getBase64ImageFromUrl('logo.jpg');
+    } catch (e) {
+      console.warn("Could not load logo.jpg, generating without logo", e);
+    }
+
+    // Top Header Band
+    doc.setFillColor(21, 128, 61);
+    doc.rect(0, 0, 148, 8, 'F');
+
+    // Logo
+    if (imgData) {
+      doc.addImage(imgData, 'JPEG', 12, 12, 32, 20);
+    } else {
+      doc.setFillColor(230, 240, 230);
+      doc.rect(12, 12, 32, 20, 'F');
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(21, 128, 61);
+      doc.text("SACBÉ", 28, 22, { align: 'center' });
+    }
+
+    // Development Title
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text("CONDOMINIO RESIDENCIAL SACBÉ", 48, 17);
+
+    // Subtitle
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("ADMINISTRACIÓN VALOR S.A. DE C.V.", 48, 22);
+
+    // Recibo Title
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(21, 128, 61);
+    doc.text("RECIBO OFICIAL DE PAGO", 48, 28);
+
+    // Metadata Box
+    doc.setFillColor(242, 249, 242);
+    doc.setDrawColor(21, 128, 61);
+    doc.rect(106, 12, 30, 18, 'FD');
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("FOLIO RECIBO", 121, 15, { align: 'center' });
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(190, 30, 30);
+    doc.text(`RC-${r.id.toString().substring(6)}`, 121, 19, { align: 'center' });
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("FECHA EMISIÓN", 121, 23, { align: 'center' });
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`${r.fecha || new Date().toISOString().split('T')[0]}`, 121, 27, { align: 'center' });
+
+    // Divider Line
+    doc.setDrawColor(220, 220, 220);
+    doc.line(12, 35, 136, 35);
+
+    // Datos del Residente
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(21, 128, 61);
+    doc.text("DATOS DEL RESIDENTE", 12, 40);
+
+    // Grid layout for resident details
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Lote / Casa:", 12, 45);
+    doc.text("Condominio:", 12, 50);
+    doc.text("Ubicación:", 75, 45);
+    doc.text("Estatus de Cuenta:", 75, 50);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`Lote #${r.casa}`, 32, 45);
+    doc.text(`${privadaName}`, 32, 50);
+    doc.text("Cancún, Quintana Roo", 102, 45);
+
+    doc.setFillColor(220, 245, 220);
+    doc.setTextColor(21, 128, 61);
+    doc.rect(102, 47, 22, 4, 'F');
+    doc.setFontSize(7);
+    doc.text("AL CORRIENTE", 103, 50.2);
+
+    // Divider
+    doc.setDrawColor(220, 220, 220);
+    doc.line(12, 54, 136, 54);
+
+    // Detalle del movimiento
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(21, 128, 61);
+    doc.text("DETALLE DEL MOVIMIENTO BANCARIO", 12, 59);
+
+    // Outer detail box
+    doc.setDrawColor(220, 220, 220);
+    doc.setFillColor(252, 252, 252);
+    doc.rect(12, 62, 124, 45, 'FD');
+
+    // Box inside grids
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+
+    // Concepto Row
+    doc.text("Concepto de Pago:", 15, 68);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(8);
+    doc.text(`${r.concepto}`, 48, 68);
+    doc.line(12, 71, 136, 71);
+
+    // Folio SPEI Row
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Referencia / Folio SPEI:", 15, 76);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(8.5);
+    doc.text(`${r.folio}`, 48, 76);
+    doc.line(12, 79, 136, 79);
+
+    // Fecha Operacion Row
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Fecha de Operación:", 15, 84);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(8);
+    doc.text(`${r.fecha}`, 48, 84);
+    doc.line(12, 87, 136, 87);
+
+    // Banco Row
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Banco Emisor:", 15, 92);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(8);
+    doc.text(`${r.banco || 'SPEI BBVA Bancomer'}`, 48, 92);
+    doc.line(12, 95, 136, 95);
+
+    // Monto Row
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Monto Total Liquidado:", 15, 101);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(21, 128, 61);
+    doc.setFontSize(11);
+    doc.text(`${fmtNum(r.monto)} MXN`, 48, 102);
+
+    // Importe con Letra Box
+    doc.setFillColor(242, 249, 242);
+    doc.setDrawColor(21, 128, 61);
+    doc.rect(12, 111, 124, 11, 'FD');
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(21, 128, 61);
+    doc.text("IMPORTE CON LETRA", 15, 114);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`${montoALetra(r.monto)}`, 15, 119);
+
+    // Legal / terms and conditions
+    doc.setFont("Helvetica", "italic");
+    doc.setFontSize(5.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Este comprobante electrónico ampara la acreditación de la transferencia bancaria correspondiente al fraccionamiento residencial Sacbé.", 12, 128);
+    doc.text("La veracidad de la transferencia se ha validado de acuerdo al Folio de Rastreo SPEI de la institución bancaria correspondiente.", 12, 130.5);
+
+    // Line under terms
+    doc.setDrawColor(220, 220, 220);
+    doc.line(12, 133, 136, 133);
+
+    // Stamp and Signatures Section
+    // Mock Validation Seal (Center stamp)
+    doc.setFillColor(245, 252, 245);
+    doc.setDrawColor(21, 128, 61);
+    doc.rect(63, 138, 22, 22, 'FD');
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(21, 128, 61);
+    doc.text("VALOR ADMON", 74, 142, { align: 'center' });
+
+    doc.setFontSize(5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("DEPARTAMENTO", 74, 146, { align: 'center' });
+    doc.text("DE FINANZAS", 74, 148, { align: 'center' });
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(21, 128, 61);
+    doc.text("✓ VALIDADO", 74, 154, { align: 'center' });
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(4.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`ID TRANS: ${r.id}`, 74, 158, { align: 'center' });
+
+    // Left Signature
+    doc.setDrawColor(150, 150, 150);
+    doc.line(15, 172, 55, 172);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(50, 50, 50);
+    doc.text("VALOR ADMINISTRACIÓN", 35, 176, { align: 'center' });
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Firma Autorizada y Sello", 35, 179, { align: 'center' });
+
+    // Right Signature
+    doc.line(93, 172, 133, 172);
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`LOTE #${r.casa}`, 113, 176, { align: 'center' });
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Firma del Residente", 113, 179, { align: 'center' });
+
+    // Footer lines
+    doc.setDrawColor(220, 220, 220);
+    doc.line(12, 187, 136, 187);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(100, 100, 100);
+    doc.text("¿Tienes dudas sobre tu estado de cuenta condominal?", 74, 192, { align: 'center' });
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(21, 128, 61);
+    doc.text("WhatsApp: 998 101 6337   ·   Email: valor.admon2022@outlook.com   ·   Cancún, Quintana Roo", 74, 196, { align: 'center' });
+
+    // Bottom Band
+    doc.setFillColor(21, 128, 61);
+    doc.rect(0, 202, 148, 8, 'F');
+
+    doc.save(`Recibo_Pago_Lote_${r.casa}_${r.id}.pdf`);
+    notify("¡Recibo PDF descargado con éxito! ✓");
+  } catch (err) {
+    console.error("Error generating PDF:", err);
+    alert("Error al generar el documento PDF: " + err.message);
+  }
 }
 
 // ── INITIALIZATION ────────────────────────────────────────────────

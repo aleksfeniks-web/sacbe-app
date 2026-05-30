@@ -122,6 +122,20 @@ async function initDatabase() {
         estado VARCHAR(50) DEFAULT 'planificado'
       );
     `);
+
+    await dbQuery(`
+      CREATE TABLE IF NOT EXISTS recibos (
+        id BIGINT PRIMARY KEY,
+        ticket_id BIGINT REFERENCES tickets(id) ON DELETE SET NULL,
+        privada_id VARCHAR(50) REFERENCES privadas(id) ON DELETE CASCADE,
+        casa INT NOT NULL,
+        concepto VARCHAR(100) NOT NULL,
+        monto DECIMAL(10,2) NOT NULL,
+        folio VARCHAR(100) NOT NULL,
+        fecha VARCHAR(50) NOT NULL,
+        creado_por VARCHAR(100) DEFAULT 'Administración Valor'
+      );
+    `);
     
     console.log("Database schema initialized.");
     
@@ -315,6 +329,20 @@ app.get('/api/db', async (req, res) => {
       motivoRechazo: row.motivo_rechazo,
       imagen_base64: row.imagen_base64
     }));
+
+    // Fetch and format recibos
+    const recibosRes = await dbQuery("SELECT * FROM recibos ORDER BY id DESC");
+    const recibosFormatted = recibosRes.rows.map(row => ({
+      id: parseInt(row.id),
+      ticketId: row.ticket_id ? parseInt(row.ticket_id) : null,
+      privadaId: row.privada_id,
+      casa: row.casa,
+      concepto: row.concepto,
+      monto: parseFloat(row.monto),
+      folio: row.folio,
+      fecha: row.fecha,
+      creadoPor: row.creado_por
+    }));
     
     res.json({
       privadas: privadasRes.rows.map(p => ({
@@ -326,7 +354,8 @@ app.get('/api/db', async (req, res) => {
       casas: casasMap,
       tickets: ticketsFormatted,
       nominas: nominasMap,
-      projects: projectsMap
+      projects: projectsMap,
+      recibos: recibosFormatted
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch database information.", details: err.message });
@@ -478,6 +507,13 @@ app.put('/api/tickets/approve', async (req, res) => {
     // Update ticket state
     await client.query("UPDATE tickets SET estado = 'Aprobado', motivo_rechazo = 'Aprobado por administración' WHERE id = $1", [ticketId]);
     
+    // Create automatic receipt
+    const reciboId = Date.now();
+    await client.query(`
+      INSERT INTO recibos (id, ticket_id, privada_id, casa, concepto, monto, folio, fecha, creado_por)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Administración Valor')
+    `, [reciboId, t.id, t.privada_id, t.casa, t.concepto, t.monto, t.folio, t.fecha]);
+
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
