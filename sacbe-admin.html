@@ -3085,12 +3085,23 @@ function selectTicketForView(ticketId) {
         <i class="fa fa-check"></i> Aprobar Transferencia
       </button>
     </div>
+  ` : (t.estado === 'Aprobado' ? `
+    <div style="margin-top:16px; display:flex; flex-direction:column; gap:12px; width:100%; max-width:440px;">
+      <div style="background:linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.03) 100%); border:1px solid rgba(16, 185, 129, 0.2); padding:16px; border-radius:12px; text-align:center; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.04);">
+        <span style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; background:rgba(16, 185, 129, 0.15); color:#059669; border-radius:50%; margin-bottom:8px; font-size:14px;"><i class="fa fa-check"></i></span><br>
+        <strong style="color:var(--green-800); font-size:14px;">Comprobante Aprobado Exitosamente</strong><br>
+        <span style="font-size:12px; color:var(--green-700); font-weight:500;">Este pago ya fue acreditado y liquidado del saldo de la casa.</span>
+      </div>
+      <button class="btn btn-primary" style="justify-content:center; padding:12px 24px; font-size:14px; background:linear-gradient(135deg, var(--green-600) 0%, var(--green-700) 100%); box-shadow:0 4px 15px rgba(5, 150, 105, 0.25); border-radius:10px; transition:all 0.3s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(5, 150, 105, 0.35)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(5, 150, 105, 0.25)';" onclick="downloadReceiptForTicket(${t.id})">
+        <i class="fa fa-file-pdf" style="font-size:16px; margin-right:4px;"></i> Descargar Recibo Oficial PDF
+      </button>
+    </div>
   ` : `
     <div style="margin-top:16px; background:var(--gray-50); border:1px solid var(--gray-200); padding:12px 18px; border-radius:8px; width:100%; max-width:440px; text-align:center;">
       <strong style="color:var(--gray-700)">Este comprobante ya fue revisado</strong><br>
       <span style="font-size:12.5px; color:var(--gray-500)">Estatus: ${t.estado} ${t.motivoRechazo ? ` - Motivo: "${t.motivoRechazo}"` : ''}</span>
     </div>
-  `;
+  `);
   
   let receiptHtml = '';
   if (t.imagen_base64) {
@@ -3232,6 +3243,36 @@ async function approveTicket(ticketId) {
   notify(`Pago Lote #${t.casa} aprobado y saldos actualizados ✓`);
   
   syncWithServer();
+}
+
+function downloadReceiptForTicket(ticketId) {
+  if (!db.recibos) db.recibos = [];
+  let r = db.recibos.find(x => x.ticketId === ticketId);
+  if (!r) {
+    // Fallback if not found in db.recibos: generate one from the ticket
+    const t = db.tickets.find(x => x.id === ticketId);
+    if (t) {
+      r = {
+        id: Date.now(),
+        ticketId: t.id,
+        privadaId: t.privadaId,
+        casa: t.casa,
+        concepto: t.concepto,
+        monto: t.monto,
+        folio: t.folio,
+        fecha: t.fecha,
+        creadoPor: 'Administración Valor'
+      };
+      db.recibos.push(r);
+      saveDBLocal();
+    }
+  }
+  
+  if (r) {
+    downloadPDFReceipt(r.id);
+  } else {
+    alert("No se encontró el recibo correspondiente.");
+  }
 }
 
 function rejectTicket(ticketId) {
